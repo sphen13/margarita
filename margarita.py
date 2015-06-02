@@ -1,8 +1,6 @@
 from flask import Flask
 from flask import jsonify, render_template, redirect
 from flask import request, Response
-# Added for providing basic Authentication
-from functools import wraps
 app = Flask(__name__)
 
 import os, sys
@@ -20,35 +18,7 @@ def json_response(r):
 	'''Glue for wrapping raw JSON responses'''
 	return Response(json.dumps(r), status=200, mimetype='application/json')
 
-
-###################################################################################
-#
-# Attempting basic auth
-# based off work from github.com/timsutton/margarita/blob/flask-basic-auth/margarity.py
-#
-
-def check_auth(username, password):
-	'''Check if a username / password combination is valid.'''
-#Change username and password here for your environment
-	return username == 'admin' and password == 'my_secret_password'
-
-def authenticate():
-	return Response("Couldn't verify your user/pass.", 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
-
-def requires_auth(f):
-	@wraps(f)
-	def decorated(*args, **kwargs):
-		auth = request.authorization
-		if not auth or not check_auth(auth.username, auth.password):
-			return authenticate()
-		return f(*args, **kwargs)
-	return decorated
-#
-##################################################################################
-
 @app.route('/')
-# Added to require basic authentiction.
-@requires_auth
 def index():
     return render_template('margarita.html')
 
@@ -121,8 +91,6 @@ def products():
 	return json_response(sprodlist)
 
 @app.route('/new_branch/<branchname>', methods=['POST'])
-# Added to require basic authentiction.
-@requires_auth
 def new_branch(branchname):
     catalog_branches = reposadocommon.getCatalogBranches()
     if branchname in catalog_branches:
@@ -134,8 +102,6 @@ def new_branch(branchname):
     return jsonify(result='success')
 
 @app.route('/delete_branch/<branchname>', methods=['POST'])
-# Added to require basic authentiction.
-@requires_auth
 def delete_branch(branchname):
     catalog_branches = reposadocommon.getCatalogBranches()
     if not branchname in catalog_branches:
@@ -162,8 +128,6 @@ def delete_branch(branchname):
     return jsonify(result=True);
 
 @app.route('/add_all/<branchname>', methods=['POST'])
-# Added to require basic authentiction.
-@requires_auth
 def add_all(branchname):
 	products = reposadocommon.getProductInfo()
 	catalog_branches = reposadocommon.getCatalogBranches()
@@ -177,8 +141,6 @@ def add_all(branchname):
 
 
 @app.route('/process_queue', methods=['POST'])
-# Added to require basic authentiction.
-@requires_auth
 def process_queue():
 	catalog_branches = reposadocommon.getCatalogBranches()
 
@@ -208,8 +170,6 @@ def process_queue():
 	return jsonify(result=True)
 
 @app.route('/dup_apple/<branchname>', methods=['POST'])
-# Added to require basic authentiction.
-@requires_auth
 def dup_apple(branchname):
 	catalog_branches = reposadocommon.getCatalogBranches()
 
@@ -233,8 +193,6 @@ def dup_apple(branchname):
 	return jsonify(result=True)
 
 @app.route('/dup/<frombranch>/<tobranch>', methods=['POST'])
-# Added to require basic authentiction.
-@requires_auth
 def dup(frombranch, tobranch):
 	catalog_branches = reposadocommon.getCatalogBranches()
 
