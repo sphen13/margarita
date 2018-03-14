@@ -80,14 +80,6 @@ def prepare_flask_request(request):
 		'query_string': request.query_string
 	}
 
-def check_auth(username, password):
-	'''Check if a username / password combination is valid.'''
-# Change username and password here for your environment
-	return username == 'admin' and password == 'password'
-
-def authenticate():
-	return Response("Couldn't verify your user/pass.", 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
-
 def requires_auth(f):
 	@wraps(f)
 	def decorated(*args, **kwargs):
@@ -111,12 +103,11 @@ def index():
 	not_auth_warn = False
 	success_slo = False
 	attributes = False
-	paint_logout = False
 
 	if 'sso' in request.args:
 		return redirect(auth.login())
 	elif 'sso2' in request.args:
-		return_to = '%sattrs/' % request.host_url
+		return_to = '%s' % request.host_url
 		return redirect(auth.login(return_to))
 	elif 'slo' in request.args:
 		name_id = None
@@ -149,9 +140,6 @@ def index():
 				success_slo = True
 
 	if 'samlUserdata' in session:
-		paint_logout = True
-		if len(session['samlUserdata']) > 0:
-			attributes = session['samlUserdata'].items()
 		return render_template('margarita.html')
 	else:
 		return redirect(auth.login())
