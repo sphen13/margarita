@@ -4,7 +4,11 @@ from flask import jsonify, render_template, redirect
 from flask import request, Response
 # Added for providing basic Authentication
 from functools import wraps
+from onelogin.saml2.auth import OneLogin_Saml2_Auth
+from onelogin.saml2.utils import OneLogin_Saml2_Utils
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'onelogindemopytoolkit'
+app.config['SAML_PATH'] = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saml')
 
 import os, sys
 try:
@@ -53,9 +57,27 @@ def json_response(r):
 
 ###################################################################################
 #
-# Attempting basic auth
-# based off work from github.com/timsutton/margarita/blob/flask-basic-auth/margarity.py
+# Attempting saml auth
 #
+
+def init_saml_auth(req):
+    auth = OneLogin_Saml2_Auth(req, custom_base_path=app.config['SAML_PATH'])
+    return auth
+
+def prepare_flask_request(request):
+    # If server is behind proxys or balancers use the HTTP_X_FORWARDED fields
+    url_data = urlparse(request.url)
+    return {
+        'https': 'on' if request.scheme == 'https' else 'off',
+        'http_host': request.host,
+        'server_port': url_data.port,
+        'script_name': request.path,
+        'get_data': request.args.copy(),
+        'post_data': request.form.copy(),
+        # Uncomment if using ADFS as IdP, https://github.com/onelogin/python-saml/pull/144
+        # 'lowercase_urlencoding': True,
+        'query_string': request.query_string
+    }
 
 def check_auth(username, password):
 	'''Check if a username / password combination is valid.'''
@@ -77,11 +99,60 @@ def requires_auth(f):
 ##################################################################################
 
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def index():
+    req = prepare_flask_request(request)
+    auth = init_saml_auth(req)
+    errors = []
+    not_auth_warn = False
+    success_slo = False
+    attributes = False
+    paint_logout = False
+
+    if 'sso' in request.args:
+        return redirect(auth.login())
+    elif 'sso2' in request.args:
+        return_to = '%sattrs/' % request.host_url
+        return redirect(auth.login(return_to))
+    elif 'slo' in request.args:
+        name_id = None
+        session_index = None
+        if 'samlNameId' in session:
+            name_id = session['samlNameId']
+        if 'samlSessionIndex' in session:
+            session_index = session['samlSessionIndex']
+
+        return redirect(auth.logout(name_id=name_id, session_index=session_index))
+    elif 'acs' in request.args:
+        auth.process_response()
+        errors = auth.get_errors()
+        not_auth_warn = not auth.is_authenticated()
+        if len(errors) == 0:
+            session['samlUserdata'] = auth.get_attributes()
+            session['samlNameId'] = auth.get_nameid()
+            session['samlSessionIndex'] = auth.get_session_index()
+            self_url = OneLogin_Saml2_Utils.get_self_url(req)
+            if 'RelayState' in request.form and self_url != request.form['RelayState']:
+                return redirect(auth.redirect_to(request.form['RelayState']))
+    elif 'sls' in request.args:
+        dscb = lambda: session.clear()
+        url = auth.process_slo(delete_session_cb=dscb)
+        errors = auth.get_errors()
+        if len(errors) == 0:
+            if url is not None:
+                return redirect(url)
+            else:
+                success_slo = True
+
+    if 'samlUserdata' in session:
+        paint_logout = True
+        if len(session['samlUserdata']) > 0:
+            attributes = session['samlUserdata'].items()
+
     return render_template('margarita.html')
+
 
 @app.route('/branches', methods=['GET'])
 def list_branches():
@@ -175,7 +246,7 @@ def products():
 
 @app.route('/new_branch/<branchname>', methods=['POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def new_branch(branchname):
     catalog_branches = reposadocommon.getCatalogBranches()
     if branchname in catalog_branches:
@@ -188,7 +259,7 @@ def new_branch(branchname):
 
 @app.route('/delete_branch/<branchname>', methods=['POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def delete_branch(branchname):
     catalog_branches = reposadocommon.getCatalogBranches()
     if not branchname in catalog_branches:
@@ -216,7 +287,7 @@ def delete_branch(branchname):
 
 @app.route('/add_all/<branchname>', methods=['POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def add_all(branchname):
 	products = reposadocommon.getProductInfo()
 	catalog_branches = reposadocommon.getCatalogBranches()
@@ -231,7 +302,7 @@ def add_all(branchname):
 
 @app.route('/process_queue', methods=['POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def process_queue():
 	catalog_branches = reposadocommon.getCatalogBranches()
 
@@ -262,7 +333,7 @@ def process_queue():
 
 @app.route('/dup_apple/<branchname>', methods=['POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def dup_apple(branchname):
 	catalog_branches = reposadocommon.getCatalogBranches()
 
@@ -287,7 +358,7 @@ def dup_apple(branchname):
 
 @app.route('/dup/<frombranch>/<tobranch>', methods=['POST'])
 # Added to require basic authentication.
-@requires_auth
+#@requires_auth
 def dup(frombranch, tobranch):
 	catalog_branches = reposadocommon.getCatalogBranches()
 
@@ -329,6 +400,21 @@ def remove_config_data(product):
 	products = reposadocommon.check_or_remove_config_data_attribute([product, ], remove_attr=True, suppress_output=True)
 
 	return json_response(products)
+
+@app.route('/metadata/')
+def metadata():
+    req = prepare_flask_request(request)
+    auth = init_saml_auth(req)
+    settings = auth.get_settings()
+    metadata = settings.get_sp_metadata()
+    errors = settings.validate_metadata(metadata)
+
+    if len(errors) == 0:
+        resp = make_response(metadata, 200)
+        resp.headers['Content-Type'] = 'text/xml'
+    else:
+        resp = make_response(', '.join(errors), 500)
+    return resp
 
 def main():
 	optlist, args = getopt.getopt(sys.argv[1:], 'db:p:')
