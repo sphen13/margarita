@@ -19,7 +19,7 @@ from distutils.version import LooseVersion
 from reposadolib import reposadocommon
 
 apple_catalog_version_map = {
-        'index-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog': '10.13',
+    'index-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog': '10.13',
 	'index-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog': '10.12',
 	'index-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog': '10.11',
 	'index-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog': '10.10',
@@ -183,7 +183,7 @@ def new_branch(branchname):
         abort(401)
     catalog_branches[branchname] = []
     reposadocommon.writeCatalogBranches(catalog_branches)
-    
+
     return jsonify(result='success')
 
 @app.route('/delete_branch/<branchname>', methods=['POST'])
@@ -211,7 +211,7 @@ def delete_branch(branchname):
             os.remove(branchcatalogpath)
 
     reposadocommon.writeCatalogBranches(catalog_branches)
-    
+
     return jsonify(result=True);
 
 @app.route('/add_all/<branchname>', methods=['POST'])
@@ -220,12 +220,12 @@ def delete_branch(branchname):
 def add_all(branchname):
 	products = reposadocommon.getProductInfo()
 	catalog_branches = reposadocommon.getCatalogBranches()
-	
+
 	catalog_branches[branchname] = products.keys()
 
 	reposadocommon.writeCatalogBranches(catalog_branches)
 	reposadocommon.writeAllBranchCatalogs()
-	
+
 	return jsonify(result=True)
 
 
@@ -242,7 +242,7 @@ def process_queue():
 		if branch not in catalog_branches.keys():
 			print 'No such catalog'
 			continue
-		
+
 		if change['listed']:
 			# if this change /was/ listed, then unlist it
 			if prodId in catalog_branches[branch]:
@@ -337,7 +337,7 @@ def main():
 	flaskargs['host'] = '0.0.0.0'
 	flaskargs['port'] = 8089
 	flaskargs['threaded'] = True
-	
+
 	for o, a in optlist:
 		if o == '-d':
 			flaskargs['debug'] = True
@@ -345,7 +345,7 @@ def main():
 			flaskargs['host'] = a
 		elif o == '-p':
 			flaskargs['port'] = int(a)
-	
+
 	app.run(**flaskargs)
 
 if __name__ == '__main__':
